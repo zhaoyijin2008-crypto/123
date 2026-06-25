@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>城探 · 中国高校城市探索平台</title>
+<script src="https://cdn.bootcdn.net/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #060612; font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+@keyframes spin { to { transform: rotate(360deg); } }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #0a0a1a; }
+::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6366f1;font-size:15px;flex-direction:column;gap:14px;">
+    <div style="font-size:24px;font-weight:900;color:#fff;">城探</div>
+    <div style="width:32px;height:32px;border:3px solid #1a1a30;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <div style="color:#555;font-size:13px;">加载中...</div>
+  </div>
+</div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+// ── 主题色 & 图标 ──────────────────────────────
+const THEME = {
+  beijing:"#c0392b", tianjin:"#2471a3", shanghai:"#1a5276",
+  nanjing:"#1e8449", hangzhou:"#117a65", suzhou:"#76448a",
+  shenzhen:"#1f618d", guangzhou:"#b7950b", wuhan:"#884ea0", chengdu:"#ca6f1e",
+};
+const ICONS = {
+  beijing:"🏯", tianjin:"🌉", shanghai:"🗼", nanjing:"🏛️",
+  hangzhou:"🌊", suzhou:"🌸", shenzhen:"🌆", guangzhou:"🏙️",
+  wuhan:"🌸", chengdu:"🐼",
+};
+const PALS = ["#c0392b","#1a5276","#1e8449","#76448a","#b7950b","#117a65","#884ea0","#ca6f1e","#2471a3"];
+function hash(s){let h=0;for(let c of s)h=(Math.imul(31,h)+c.charCodeAt(0))|0;return Math.abs(h);}
+function col(name,id){return id&&THEME[id]?THEME[id]:PALS[hash(name||"x")%PALS.length];}
+
+function Img({id,name,label,h=160,small}){
+  const c=col(name||label,id), icon=ICONS[id]||"🏙️", txt=label||name||"";
+  const dark=c+"cc";
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${c}"/><stop offset="100%" stop-color="${dark}"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><text x="400" y="220" font-size="60" text-anchor="middle" dominant-baseline="middle">${icon}</text><text x="400" y="310" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="${small?18:22}" font-weight="600" fill="rgba(255,255,255,0.95)" text-anchor="middle">${txt}</text></svg>`;
+  return <div style={{height:h,background:dark,overflow:"hidden",borderRadius:0}}><img src={"data:image/svg+xml,"+encodeURIComponent(svg)} alt={txt} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/></div>;
+}
+function UniImg({name,label,cityId,h=140,small}){
+  const c=col(name,cityId), dark=c+"bb", txt=label||name||"";
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="${dark}"/><stop offset="100%" stop-color="${c}"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/><text x="400" y="230" font-size="40" text-anchor="middle">🎓</text><text x="400" y="300" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="${small?14:18}" font-weight="600" fill="rgba(255,255,255,0.9)" text-anchor="middle">${txt}</text></svg>`;
+  return <div style={{height:h,background:dark,overflow:"hidden"}}><img src={"data:image/svg+xml,"+encodeURIComponent(svg)} alt={txt} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/></div>;
+}
+
+// ── 内蒙古分数线组件 ───────────────────────────
+function ScoreTable({scores}){
+  const groups={"理科/物理类":["理科","物理类"],"文科/历史类":["文科","历史类"]};
+  const avail=Object.keys(groups).filter(g=>groups[g].some(t=>(scores||[]).some(s=>s.type===t)));
+  const [tab,setTab]=useState(avail[0]||"理科/物理类");
+  if(!scores||!scores.length)return null;
+  const rows=scores.filter(s=>groups[tab]&&groups[tab].includes(s.type)).sort((a,b)=>b.year-a.year);
+  const vals=rows.map(r=>r.score), mn=Math.min(...vals)-5, mx=Math.max(...vals)+5;
+  return(
+    <div style={{marginBottom:28}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+        <h3 style={{color:"#fff",margin:0,fontSize:17}}>📊 内蒙古历年录取数据</h3>
+        <span style={{color:"#555",fontSize:11}}>来源：内蒙古招考院 / 掌上高考</span>
+      </div>
+      <p style={{color:"#f59e0b",fontSize:11,margin:"0 0 10px"}}>⚠️ "约"字为估算值，以官方公布为准</p>
+      {avail.length>1&&<div style={{display:"flex",gap:6,marginBottom:12}}>
+        {avail.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"4px 14px",background:tab===t?"#6366f1":"#111",border:`1px solid ${tab===t?"#6366f1":"#333"}`,borderRadius:16,color:tab===t?"#fff":"#888",cursor:"pointer",fontSize:12}}>{t}</button>)}
+      </div>}
+      <div style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,overflow:"hidden"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><tr style={{background:"#111"}}>
+            {["年份","最低分","全省位次","趋势"].map(h=><th key={h} style={{padding:"8px 12px",color:"#666",fontSize:11,fontWeight:600,textAlign:"left",borderBottom:"1px solid #1a1a30"}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{rows.map((r,i)=>{
+            const bw=Math.round(((r.score-mn)/(mx-mn))*100), latest=i===0;
+            return <tr key={r.year+r.type} style={{borderBottom:"1px solid #0d0d1f",background:latest?"#6366f108":"transparent"}}>
+              <td style={{padding:"9px 12px",color:latest?"#a5b4fc":"#ccc",fontSize:13,fontWeight:latest?700:400}}>
+                {r.year}{latest&&<span style={{marginLeft:5,fontSize:9,color:"#6366f1",background:"#6366f120",padding:"1px 5px",borderRadius:6}}>最新</span>}
+              </td>
+              <td style={{padding:"9px 12px",color:"#fff",fontSize:14,fontWeight:700}}>{r.score}<span style={{color:"#555",fontSize:10,marginLeft:2}}>分</span></td>
+              <td style={{padding:"9px 12px",color:"#a5b4fc",fontSize:12}}>第{r.rank}名</td>
+              <td style={{padding:"9px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{flex:1,height:5,background:"#1a1a30",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{width:`${bw}%`,height:"100%",background:latest?"#6366f1":"#2a2a5a",borderRadius:3}}/>
+                  </div>
+                  <span style={{color:"#555",fontSize:10,minWidth:24}}>{r.score}</span>
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      {rows.length>=2&&(()=>{const d=rows[0].score-rows[rows.length-1].score;return(
+        <div style={{marginTop:8,padding:"6px 12px",background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:8,fontSize:12,color:"#888"}}>
+          近五年趋势：<span style={{color:d>=0?"#34d399":"#f87171",fontWeight:700}}>{d>=0?"↑":"↓"}{Math.abs(d)}分</span>
+          <span style={{marginLeft:8}}>（{rows[rows.length-1].year}年{rows[rows.length-1].score}分 → {rows[0].year}年{rows[0].score}分）</span>
+        </div>
+      );})()} 
+    </div>
+  );
+}
+
+// ── 数据 ───────────────────────────────────────
+const CITIES={
+  beijing:{id:"beijing",name:"北京",province:"北京市",region:"华北",pop:"约2184万",gdp:"约4.4万亿",desc:"北京是中国的首都，政治、文化、国际交往与科技创新中心，拥有深厚历史底蕴与世界级高校。",industries:["人工智能","金融","互联网","文化创意"],companies:["字节跳动","百度","京东","小米","美团"],empDesc:"适合计算机、金融、传媒类专业。AI、大模型产业增速领先。",adv:[{t:"教育资源",d:"90+高校，国内顶尖学术高地"},{t:"就业机会",d:"互联网、金融、央企总部云集"},{t:"科技发展",d:"中关村引领AI、芯片、生物医药"},{t:"城市竞争力",d:"国际化都市，资源整合全国前列"}],ranks:{emp:2,uni:1,sal:2,all:1},unis:["tsinghua","pku","ruc","buaa","bit"]},
+  tianjin:{id:"tianjin",name:"天津",province:"天津市",region:"华北",pop:"约1373万",gdp:"约1.6万亿",desc:"天津是中国北方重要港口城市，工业基础雄厚，拥有南开、天大两所顶尖高校。",industries:["装备制造","石油化工","新能源","生物医药"],companies:["中石油天津","一汽丰田","空客天津"],empDesc:"适合机械、化工、自动化类专业。",adv:[{t:"教育资源",d:"南开+天大双星并立"},{t:"就业机会",d:"滨海新区国家级高新区"},{t:"科技发展",d:"制造业与新能源协调发展"},{t:"城市竞争力",d:"京津冀协同发展核心区"}],ranks:{emp:6,uni:5,sal:7,all:6},unis:["nankai","tju"]},
+  shanghai:{id:"shanghai",name:"上海",province:"上海市",region:"华东",pop:"约2489万",gdp:"约4.7万亿",desc:"上海是中国国际经济、金融、贸易、航运中心，全球化程度最高的城市之一。",industries:["金融","贸易","科技","航运"],companies:["阿里巴巴","蚂蚁集团","中芯国际","联合利华"],empDesc:"适合金融、贸易、计算机类专业。薪资起点全国最高。",adv:[{t:"教育资源",d:"复旦、交大等60+高校"},{t:"就业机会",d:"金融+外资+互联网大厂密集"},{t:"科技发展",d:"张江高科聚集芯片、生物医药"},{t:"城市竞争力",d:"全国GDP最高，国际化领先"}],ranks:{emp:1,uni:2,sal:1,all:2},unis:["fudan","sjtu","tongji","ecnu"]},
+  nanjing:{id:"nanjing",name:"南京",province:"江苏省",region:"华东",pop:"约949万",gdp:"约1.7万亿",desc:"南京是六朝古都，国家重要科教中心，软件、芯片、智能制造产业基础雄厚。",industries:["软件开发","芯片产业","智能制造","新能源"],companies:["南瑞集团","熊猫电子","苏宁"],empDesc:"适合软件工程、电子信息、自动化类专业。",adv:[{t:"教育资源",d:"南大、东南等50+高校"},{t:"就业机会",d:"国企、研究所、软件园稳定"},{t:"科技发展",d:"软件谷、江北新区聚集芯片企业"},{t:"城市竞争力",d:"长三角核心节点，性价比突出"}],ranks:{emp:4,uni:3,sal:5,all:4},unis:["nju","seu","nuaa","njust","hhu"]},
+  hangzhou:{id:"hangzhou",name:"杭州",province:"浙江省",region:"华东",pop:"约1237万",gdp:"约2.1万亿",desc:"杭州是数字经济之都，电商、互联网、金融科技产业蓬勃发展，山水城市兼具人文气质。",industries:["数字经济","电子商务","金融科技","文化旅游"],companies:["阿里巴巴","网易","海康威视","大华股份"],empDesc:"适合计算机、电商运营、金融类专业。",adv:[{t:"教育资源",d:"浙大C9高校，学科均衡"},{t:"就业机会",d:"阿里系企业密集"},{t:"科技发展",d:"数字经济核心区"},{t:"城市竞争力",d:"亚运会城市，国际影响力强"}],ranks:{emp:3,uni:6,sal:3,all:3},unis:["zju"]},
+  suzhou:{id:"suzhou",name:"苏州",province:"江苏省",region:"华东",pop:"约1295万",gdp:"约2.4万亿",desc:"苏州是中国最富庶的地级市，园林古城与现代工业完美融合。",industries:["先进制造","生物医药","纳米技术","金融服务"],companies:["博世","三星半导体","礼来制药"],empDesc:"适合材料、化工、机械、生物工程类专业。",adv:[{t:"教育资源",d:"苏州大学、西浦国际化氛围浓"},{t:"就业机会",d:"工业园区外资企业多"},{t:"科技发展",d:"纳米技术、生物医药领先"},{t:"城市竞争力",d:"GDP全国地级市第一"}],ranks:{emp:5,uni:9,sal:4,all:5},unis:["suda","xjtlu"]},
+  shenzhen:{id:"shenzhen",name:"深圳",province:"广东省",region:"华南",pop:"约1779万",gdp:"约3.4万亿",desc:"深圳是中国改革开放窗口与科技创新之都，新一代科技企业云集，年轻活力。",industries:["新能源","通信互联网","科技硬件","制造业"],companies:["腾讯","华为","比亚迪","大疆","中兴"],empDesc:"适合计算机、通信、电子类专业。薪资水平全国领先。",adv:[{t:"教育资源",d:"南科大、深大新兴名校崛起"},{t:"就业机会",d:"科技大厂林立，创业氛围最浓"},{t:"科技发展",d:"新能源、通信、AI产业链完整"},{t:"城市竞争力",d:"人均GDP、人口净流入全国前列"}],ranks:{emp:3,uni:7,sal:2,all:3},unis:["sustech","szu","hitsz"]},
+  guangzhou:{id:"guangzhou",name:"广州",province:"广东省",region:"华南",pop:"约1882万",gdp:"约3.0万亿",desc:"广州是华南最大城市，千年商都，对外贸易历史悠久，高校资源丰富。",industries:["外贸","汽车制造","生物医药","互联网"],companies:["广汽集团","唯品会","网易广州","广药集团"],empDesc:"适合医学、外贸、机械类专业。",adv:[{t:"教育资源",d:"中大、华工等顶尖高校"},{t:"就业机会",d:"外贸、制造、医疗需求旺盛"},{t:"科技发展",d:"AI与数字经济试验区"},{t:"城市竞争力",d:"粤港澳大湾区核心"}],ranks:{emp:5,uni:4,sal:6,all:5},unis:["sysu","scut","jnu"]},
+  wuhan:{id:"wuhan",name:"武汉",province:"湖北省",region:"华中",pop:"约1365万",gdp:"约2.0万亿",desc:"武汉是华中最大城市，科教实力雄厚，武大与华科双峰并峙，「九省通衢」。",industries:["光电信息","生命健康","汽车制造","智能制造"],companies:["东风汽车","华为武汉","小米武汉","斗鱼"],empDesc:"适合光电、通信、生命科学、汽车类专业。",adv:[{t:"教育资源",d:"在校大学生超130万"},{t:"就业机会",d:"光谷科技走廊聚集大量企业"},{t:"科技发展",d:"光电信息、生命健康、智能制造"},{t:"城市竞争力",d:"长江经济带核心，承东启西"}],ranks:{emp:7,uni:4,sal:8,all:7},unis:["whu","hust","ccnu","whut"]},
+  chengdu:{id:"chengdu",name:"成都",province:"四川省",region:"西南",pop:"约2140万",gdp:"约2.2万亿",desc:"成都是天府之国核心，生活品质与经济活力兼备，新经济、游戏、航空产业蓬勃。",industries:["电子信息","航空航天","新经济","文创旅游"],companies:["腾讯成都","字节成都","英特尔成都","华为成都"],empDesc:"适合计算机、航空、电子、文化创意类专业。",adv:[{t:"教育资源",d:"川大、电科大双一流"},{t:"就业机会",d:"新经济企业涌现"},{t:"科技发展",d:"天府新区聚集500强"},{t:"城市竞争力",d:"西南第一城，网红城市"}],ranks:{emp:8,uni:8,sal:9,all:8},unis:["scu","uestc","swufe"]},
+};
+
+const UNIS={
+  tsinghua:{id:"tsinghua",name:"清华大学",city:"beijing",founded:1911,web:"https://www.tsinghua.edu.cn",desc:"中国顶尖综合性研究型大学，以工科见长，理工文管协调发展。",majors:["计算机科学","电气工程","建筑学","经济管理"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["pku","seu","whu"],
+    nmg:[{year:2025,type:"物理类",score:693,rank:49},{year:2025,type:"历史类",score:681,rank:"12以内"},{year:2024,type:"理科",score:693,rank:49},{year:2024,type:"文科",score:609,rank:"约15"},{year:2023,type:"理科",score:674,rank:54},{year:2023,type:"文科",score:648,rank:11},{year:2022,type:"理科",score:660,rank:"约60"},{year:2022,type:"文科",score:582,rank:"约20"},{year:2021,type:"理科",score:673,rank:"约50"},{year:2021,type:"文科",score:653,rank:11},{year:2020,type:"理科",score:671,rank:"约55"},{year:2020,type:"文科",score:643,rank:"约12"}]},
+  pku:{id:"pku",name:"北京大学",city:"beijing",founded:1898,web:"https://www.pku.edu.cn",desc:"中国近代第一所国立综合性大学，文理基础深厚，学术氛围浓郁。",majors:["数学","物理学","中国语言文学","法学"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["tsinghua","ruc","nju"],
+    nmg:[{year:2025,type:"物理类",score:694,rank:47},{year:2025,type:"历史类",score:675,rank:12},{year:2024,type:"理科",score:694,rank:47},{year:2024,type:"文科",score:609,rank:"约16"},{year:2023,type:"理科",score:678,rank:40},{year:2023,type:"文科",score:637,rank:12},{year:2022,type:"理科",score:639,rank:"约65"},{year:2022,type:"文科",score:620,rank:"约14"},{year:2021,type:"理科",score:672,rank:"约48"},{year:2021,type:"文科",score:649,rank:12},{year:2020,type:"理科",score:670,rank:"约50"},{year:2020,type:"文科",score:640,rank:"约13"}]},
+  ruc:{id:"ruc",name:"中国人民大学",city:"beijing",founded:1937,web:"https://www.ruc.edu.cn",desc:"以人文社会科学为主的综合性研究型大学，经济、法学、新闻传播位居全国前列。",majors:["经济学","法学","新闻传播","社会学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:4,dorm:4,emp:5},recs:["pku","fudan","nankai"],
+    nmg:[{year:2025,type:"物理类",score:677,rank:245},{year:2025,type:"历史类",score:661,rank:56},{year:2024,type:"理科",score:644,rank:"约1490"},{year:2024,type:"文科",score:609,rank:87},{year:2023,type:"理科",score:625,rank:"约1600"},{year:2023,type:"文科",score:609,rank:87},{year:2022,type:"理科",score:601,rank:"约1800"},{year:2022,type:"文科",score:580,rank:"约110"},{year:2021,type:"理科",score:620,rank:"约1650"},{year:2020,type:"理科",score:618,rank:"约1700"}]},
+  buaa:{id:"buaa",name:"北京航空航天大学",city:"beijing",founded:1952,web:"https://www.buaa.edu.cn",desc:"以航空航天为特色，工理文管协调发展的全国重点大学。",majors:["航空工程","宇航科学","计算机科学","仪器科学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:4,dorm:4,emp:5},recs:["bit","nuaa","hitsz"],
+    nmg:[{year:2025,type:"物理类",score:672,rank:350},{year:2025,type:"历史类",score:644,rank:199},{year:2024,type:"理科",score:668,rank:"约450"},{year:2023,type:"理科",score:651,rank:"约500"},{year:2022,type:"理科",score:632,rank:"约620"},{year:2021,type:"理科",score:648,rank:"约530"},{year:2020,type:"理科",score:645,rank:"约560"}]},
+  bit:{id:"bit",name:"北京理工大学",city:"beijing",founded:1940,web:"https://www.bit.edu.cn",desc:"新中国第一所国防工业院校，工科实力雄厚。",majors:["武器系统","信息对抗","车辆工程","光学工程"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:4,dorm:4,emp:5},recs:["buaa","njust","hitsz"],
+    nmg:[{year:2025,type:"物理类",score:669,rank:413},{year:2025,type:"历史类",score:639,rank:292},{year:2024,type:"理科",score:655,rank:"约900"},{year:2023,type:"理科",score:638,rank:"约980"},{year:2022,type:"理科",score:617,rank:"约1200"},{year:2021,type:"理科",score:634,rank:"约1050"},{year:2020,type:"理科",score:631,rank:"约1100"}]},
+  nankai:{id:"nankai",name:"南开大学",city:"tianjin",founded:1919,web:"https://www.nankai.edu.cn",desc:"著名综合性重点大学，数学、化学、历史等学科实力突出。",majors:["数学","化学","经济学","历史学"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:4,dorm:4,emp:4},recs:["tju","pku","whu"],
+    nmg:[{year:2025,type:"物理类",score:656,rank:841},{year:2025,type:"历史类",score:648,rank:152},{year:2024,type:"理科",score:653,rank:"约1003"},{year:2024,type:"文科",score:612,rank:"约70"},{year:2023,type:"理科",score:636,rank:"约1050"},{year:2023,type:"文科",score:604,rank:116},{year:2022,type:"理科",score:613,rank:"约1280"},{year:2022,type:"文科",score:576,rank:"约145"},{year:2021,type:"理科",score:631,rank:"约1100"},{year:2020,type:"理科",score:628,rank:"约1150"}]},
+  tju:{id:"tju",name:"天津大学",city:"tianjin",founded:1895,web:"https://www.tju.edu.cn",desc:"中国第一所现代大学，建筑、化工、精仪学科全国知名。",majors:["化学工程","建筑学","精密仪器","材料科学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:4,emp:4},recs:["nankai","seu","tongji"],
+    nmg:[{year:2025,type:"物理类",score:652,rank:1052},{year:2025,type:"历史类",score:635,rank:370},{year:2024,type:"理科",score:649,rank:"约1218"},{year:2023,type:"理科",score:632,rank:"约1200"},{year:2022,type:"理科",score:608,rank:"约1450"},{year:2021,type:"理科",score:628,rank:"约1250"},{year:2020,type:"理科",score:624,rank:"约1300"}]},
+  fudan:{id:"fudan",name:"复旦大学",city:"shanghai",founded:1905,web:"https://www.fudan.edu.cn",desc:"著名综合性研究型大学，文理医工均衡发展，综合实力全国前三。",majors:["新闻传播","生命科学","计算机科学","管理学"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["sjtu","pku","nju"],
+    nmg:[{year:2025,type:"物理类",score:685,rank:120},{year:2025,type:"历史类",score:665,rank:38},{year:2024,type:"理科",score:685,rank:120},{year:2024,type:"文科",score:621,rank:"约37"},{year:2023,type:"理科",score:667,rank:"约130"},{year:2023,type:"文科",score:621,rank:37},{year:2022,type:"理科",score:640,rank:"约160"},{year:2022,type:"文科",score:594,rank:"约50"},{year:2021,type:"理科",score:660,rank:"约140"},{year:2020,type:"理科",score:658,rank:"约145"}]},
+  sjtu:{id:"sjtu",name:"上海交通大学",city:"shanghai",founded:1896,web:"https://www.sjtu.edu.cn",desc:"顶尖工科大学，医学、工科、金融实力均领先全国。",majors:["机械工程","电子信息","临床医学","金融工程"],tier:"C9",dorm:{type:"4人间",ac:true,bath:true},rate:{study:5,env:5,dorm:5,emp:5},recs:["fudan","tsinghua","zju"],
+    nmg:[{year:2025,type:"物理类",score:688,rank:82},{year:2025,type:"历史类",score:667,rank:31},{year:2024,type:"理科",score:688,rank:82},{year:2024,type:"文科",score:617,rank:"约45"},{year:2023,type:"理科",score:670,rank:"约100"},{year:2023,type:"文科",score:621,rank:37},{year:2022,type:"理科",score:643,rank:"约135"},{year:2021,type:"理科",score:663,rank:"约110"},{year:2020,type:"理科",score:661,rank:"约115"}]},
+  tongji:{id:"tongji",name:"同济大学",city:"shanghai",founded:1907,web:"https://www.tongji.edu.cn",desc:"以建筑、土木、城市规划、汽车工程著称的重点高校。",majors:["建筑学","土木工程","城乡规划","汽车工程"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:4,emp:4},recs:["sjtu","seu","tju"],
+    nmg:[{year:2025,type:"物理类",score:663,rank:577},{year:2025,type:"历史类",score:645,rank:189},{year:2024,type:"理科",score:660,rank:"约670"},{year:2023,type:"理科",score:643,rank:"约740"},{year:2023,type:"文科",score:592,rank:206},{year:2022,type:"理科",score:620,rank:"约920"},{year:2021,type:"理科",score:638,rank:"约790"},{year:2020,type:"理科",score:635,rank:"约830"}]},
+  ecnu:{id:"ecnu",name:"华东师范大学",city:"shanghai",founded:1951,web:"https://www.ecnu.edu.cn",desc:"教育部直属重点高校，师范教育与教育研究水平领先全国。",majors:["教育学","心理学","中国语言文学","数学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:4,emp:4},recs:["fudan","ccnu","nankai"],
+    nmg:[{year:2024,type:"理科",score:622,rank:"约2500"},{year:2023,type:"理科",score:606,rank:"约2700"},{year:2023,type:"文科",score:526,rank:2074},{year:2022,type:"理科",score:582,rank:"约3200"},{year:2021,type:"理科",score:601,rank:"约2800"},{year:2020,type:"理科",score:598,rank:"约2900"}]},
+  nju:{id:"nju",name:"南京大学",city:"nanjing",founded:1902,web:"https://www.nju.edu.cn",desc:"中国历史最悠久的高等学府之一，文理基础学科实力领先。",majors:["计算机科学","天文学","地理学","物理学"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["seu","whu","zju"],
+    nmg:[{year:2025,type:"物理类",score:680,rank:190},{year:2025,type:"历史类",score:657,rank:81},{year:2024,type:"理科",score:680,rank:190},{year:2024,type:"文科",score:617,rank:"约47"},{year:2023,type:"理科",score:661,rank:"约210"},{year:2023,type:"文科",score:613,rank:67},{year:2022,type:"理科",score:634,rank:"约270"},{year:2021,type:"理科",score:654,rank:"约230"},{year:2020,type:"理科",score:652,rank:"约240"}]},
+  seu:{id:"seu",name:"东南大学",city:"nanjing",founded:1902,web:"https://www.seu.edu.cn",desc:"以建筑、土木、电子、信息学科闻名于世。",majors:["建筑学","信息工程","土木工程","交通运输"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:4},recs:["nju","tongji","tju"],
+    nmg:[{year:2025,type:"物理类",score:661,rank:638},{year:2025,type:"历史类",score:641,rank:254},{year:2024,type:"理科",score:659,rank:"约750"},{year:2023,type:"理科",score:642,rank:"约810"},{year:2023,type:"文科",score:578,rank:404},{year:2022,type:"理科",score:617,rank:"约1000"},{year:2021,type:"理科",score:637,rank:"约850"},{year:2020,type:"理科",score:634,rank:"约900"}]},
+  nuaa:{id:"nuaa",name:"南京航空航天大学",city:"nanjing",founded:1952,web:"https://www.nuaa.edu.cn",desc:"工业和信息化部直属的航空航天民航特色高校。",majors:["航空宇航科学","飞行器设计","电子信息","材料科学"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:4,emp:4},recs:["buaa","njust","hitsz"],
+    nmg:[{year:2025,type:"物理类",score:641,rank:1697},{year:2024,type:"理科",score:638,rank:"约2000"},{year:2023,type:"理科",score:621,rank:"约2200"},{year:2022,type:"理科",score:597,rank:"约2700"},{year:2021,type:"理科",score:616,rank:"约2300"},{year:2020,type:"理科",score:613,rank:"约2400"}]},
+  njust:{id:"njust",name:"南京理工大学",city:"nanjing",founded:1953,web:"https://www.njust.edu.cn",desc:"以兵器、信息、材料学科见长。",majors:["武器系统工程","材料科学","信息工程","电子科学"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:3,emp:4},recs:["nuaa","bit","buaa"],
+    nmg:[{year:2024,type:"理科",score:628,rank:"约2700"},{year:2023,type:"理科",score:612,rank:"约2900"},{year:2022,type:"理科",score:588,rank:"约3500"},{year:2021,type:"理科",score:606,rank:"约3100"},{year:2020,type:"理科",score:603,rank:"约3200"}]},
+  hhu:{id:"hhu",name:"河海大学",city:"nanjing",founded:1915,web:"https://www.hhu.edu.cn",desc:"以水利为特色的综合性研究型大学。",majors:["水利工程","港口航道","环境工程","土木工程"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:3,emp:4},recs:["seu","nju","tongji"],
+    nmg:[{year:2024,type:"理科",score:618,rank:"约3100"},{year:2023,type:"理科",score:600,rank:"约3300"},{year:2023,type:"文科",score:542,rank:1359},{year:2022,type:"理科",score:577,rank:"约4000"},{year:2021,type:"理科",score:595,rank:"约3500"},{year:2020,type:"理科",score:592,rank:"约3600"}]},
+  zju:{id:"zju",name:"浙江大学",city:"hangzhou",founded:1897,web:"https://www.zju.edu.cn",desc:"顶尖综合性研究型大学，工农理医文综合实力全面均衡，校园环境优美。",majors:["计算机科学","农学","医学","机械工程"],tier:"C9",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["sjtu","fudan","nju"],
+    nmg:[{year:2025,type:"物理类",score:683,rank:140},{year:2025,type:"历史类",score:659,rank:70},{year:2024,type:"理科",score:683,rank:140},{year:2024,type:"文科",score:614,rank:"约62"},{year:2023,type:"理科",score:665,rank:"约170"},{year:2023,type:"文科",score:614,rank:62},{year:2022,type:"理科",score:637,rank:"约215"},{year:2021,type:"理科",score:658,rank:"约185"},{year:2020,type:"理科",score:655,rank:"约195"}]},
+  suda:{id:"suda",name:"苏州大学",city:"suzhou",founded:1900,web:"https://www.suda.edu.cn",desc:"江苏省属重点综合性大学，纳米科技、医学、丝绸纺织特色鲜明。",majors:["纳米科学","医学","丝绸工程","计算机科学"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:4,emp:4},recs:["szu","jnu","hhu"],
+    nmg:[{year:2025,type:"历史类",score:625,rank:643},{year:2024,type:"理科",score:597,rank:"约5500"},{year:2023,type:"理科",score:580,rank:"约5800"},{year:2023,type:"文科",score:519,rank:2483},{year:2022,type:"理科",score:557,rank:"约7000"},{year:2021,type:"理科",score:574,rank:"约6200"},{year:2020,type:"理科",score:570,rank:"约6400"}]},
+  xjtlu:{id:"xjtlu",name:"西交利物浦大学",city:"suzhou",founded:2006,web:"https://www.xjtlu.edu.cn",desc:"中外合作大学，全英文教学，国际化程度高，直通英国利物浦大学学位。",majors:["金融数学","商业管理","计算机科学","建筑学"],tier:"合作大学",dorm:{type:"4人间",ac:true,bath:true},rate:{study:4,env:5,dorm:5,emp:4},recs:["suda","jnu","sjtu"],
+    nmg:[{year:2025,type:"历史类",score:525,rank:2141},{year:2024,type:"理科",score:552,rank:"约10000"},{year:2023,type:"理科",score:535,rank:"约11000"},{year:2023,type:"文科",score:525,rank:2141},{year:2022,type:"理科",score:511,rank:"约13000"},{year:2021,type:"理科",score:528,rank:"约12000"},{year:2020,type:"理科",score:524,rank:"约12500"}]},
+  sustech:{id:"sustech",name:"南方科技大学",city:"shenzhen",founded:2010,web:"https://www.sustech.edu.cn",desc:"国家高等教育综合改革试验校，理工医结合，国际化程度高。",majors:["理学","工学","生命健康","统计学"],tier:"双一流",dorm:{type:"4人间",ac:true,bath:true},rate:{study:5,env:5,dorm:5,emp:5},recs:["szu","sysu","suda"],
+    nmg:[{year:2025,type:"物理类",score:661,rank:638},{year:2024,type:"理科",score:659,rank:"约750"},{year:2023,type:"理科",score:642,rank:"约810"},{year:2022,type:"理科",score:618,rank:"约980"},{year:2021,type:"理科",score:637,rank:"约850"},{year:2020,type:"理科",score:634,rank:"约900"}]},
+  szu:{id:"szu",name:"深圳大学",city:"shenzhen",founded:1983,web:"https://www.szu.edu.cn",desc:"深圳经济特区自办的综合性大学，发展迅速，校园景观优美。",majors:["计算机科学","传播学","建筑学","金融学"],tier:"省重点",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:4,emp:4},recs:["sustech","suda","jnu"],
+    nmg:[{year:2024,type:"理科",score:578,rank:"约7000"},{year:2023,type:"理科",score:562,rank:"约7500"},{year:2023,type:"文科",score:531,rank:1821},{year:2022,type:"理科",score:538,rank:"约9200"},{year:2021,type:"理科",score:556,rank:"约8100"},{year:2020,type:"理科",score:552,rank:"约8400"}]},
+  hitsz:{id:"hitsz",name:"哈工大（深圳）",city:"shenzhen",founded:1920,web:"https://www.hitsz.edu.cn",desc:"依托哈工大主校区，工科实力强劲，地处深圳，就业优势明显。",majors:["机械工程","计算机科学","材料科学","电气工程"],tier:"985",dorm:{type:"4人间",ac:true,bath:true},rate:{study:5,env:5,dorm:5,emp:5},recs:["sustech","bit","buaa"],
+    nmg:[{year:2025,type:"物理类",score:668,rank:436},{year:2025,type:"历史类",score:627,rank:585},{year:2024,type:"理科",score:665,rank:"约520"},{year:2023,type:"理科",score:648,rank:"约570"},{year:2022,type:"理科",score:624,rank:"约730"},{year:2021,type:"理科",score:642,rank:"约620"},{year:2020,type:"理科",score:639,rank:"约660"}]},
+  sysu:{id:"sysu",name:"中山大学",city:"guangzhou",founded:1924,web:"https://www.sysu.edu.cn",desc:"华南地区最高学府，医学、社会学、中国语言文学全国领先。",majors:["临床医学","中国语言文学","社会学","法学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["scut","jnu","whu"],
+    nmg:[{year:2025,type:"物理类",score:654,rank:950},{year:2025,type:"历史类",score:643,rank:217},{year:2024,type:"理科",score:651,rank:"约1100"},{year:2023,type:"理科",score:634,rank:"约1150"},{year:2023,type:"文科",score:583,rank:319},{year:2022,type:"理科",score:610,rank:"约1400"},{year:2021,type:"理科",score:628,rank:"约1200"},{year:2020,type:"理科",score:625,rank:"约1250"}]},
+  scut:{id:"scut",name:"华南理工大学",city:"guangzhou",founded:1952,web:"https://www.scut.edu.cn",desc:"以理工为特色的综合性研究型大学，建筑、食品、化工全国顶尖。",majors:["建筑学","化学工程","食品科学","材料科学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:4,emp:4},recs:["sysu","seu","tongji"],
+    nmg:[{year:2025,type:"物理类",score:656,rank:841},{year:2024,type:"理科",score:641,rank:"约1700"},{year:2023,type:"理科",score:624,rank:"约1800"},{year:2022,type:"理科",score:601,rank:"约2200"},{year:2021,type:"理科",score:618,rank:"约1950"},{year:2020,type:"理科",score:615,rank:"约2000"}]},
+  jnu:{id:"jnu",name:"暨南大学",city:"guangzhou",founded:1906,web:"https://www.jnu.edu.cn",desc:"华侨最高学府，国际学生比例高，传播学、商学面向港澳台及海外华人。",majors:["新闻传播","工商管理","临床医学","国际经贸"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:4,emp:4},recs:["sysu","szu","suda"],
+    nmg:[{year:2024,type:"理科",score:590,rank:"约6000"},{year:2023,type:"理科",score:574,rank:"约6400"},{year:2023,type:"文科",score:526,rank:2074},{year:2022,type:"理科",score:551,rank:"约7800"},{year:2021,type:"理科",score:568,rank:"约6800"},{year:2020,type:"理科",score:564,rank:"约7000"}]},
+  whu:{id:"whu",name:"武汉大学",city:"wuhan",founded:1893,web:"https://www.whu.edu.cn",desc:"中国最美大学之一，文理医工综合实力全面，测绘、法学领先全国。",majors:["测绘科学","法学","经济学","计算机科学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["hust","nju","nankai"],
+    nmg:[{year:2025,type:"物理类",score:659,rank:713},{year:2025,type:"历史类",score:652,rank:108},{year:2024,type:"理科",score:656,rank:"约841"},{year:2024,type:"文科",score:610,rank:"约82"},{year:2023,type:"理科",score:638,rank:"约920"},{year:2023,type:"文科",score:578,rank:404},{year:2022,type:"理科",score:615,rank:"约1130"},{year:2021,type:"理科",score:632,rank:"约980"},{year:2020,type:"理科",score:630,rank:"约1020"}]},
+  hust:{id:"hust",name:"华中科技大学",city:"wuhan",founded:1952,web:"https://www.hust.edu.cn",desc:"以工科为主的综合性大学，光电、材料、机械全国前列，被誉为「工科黄埔」。",majors:["光电信息","机械工程","计算机科学","材料科学"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:5},recs:["whu","seu","tsinghua"],
+    nmg:[{year:2025,type:"物理类",score:654,rank:950},{year:2024,type:"理科",score:651,rank:"约1099"},{year:2023,type:"理科",score:634,rank:"约1150"},{year:2022,type:"理科",score:611,rank:"约1380"},{year:2021,type:"理科",score:628,rank:"约1200"},{year:2020,type:"理科",score:625,rank:"约1250"}]},
+  ccnu:{id:"ccnu",name:"华中师范大学",city:"wuhan",founded:1903,web:"https://www.ccnu.edu.cn",desc:"教育部直属师范大学，教育学、文学、历史学强校。",majors:["教育学","中国语言文学","历史学","政治学"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:5,dorm:3,emp:4},recs:["ecnu","whu","nankai"],
+    nmg:[{year:2024,type:"理科",score:592,rank:"约5800"},{year:2023,type:"理科",score:576,rank:"约6200"},{year:2023,type:"文科",score:526,rank:2074},{year:2022,type:"理科",score:552,rank:"约7600"},{year:2021,type:"理科",score:570,rank:"约6600"},{year:2020,type:"理科",score:566,rank:"约6800"}]},
+  whut:{id:"whut",name:"武汉理工大学",city:"wuhan",founded:1948,web:"https://www.whut.edu.cn",desc:"以材料、交通运输、船舶海洋为特色，教育部直属重点高校。",majors:["材料科学","交通运输","船舶海洋","机械工程"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:3,emp:4},recs:["hust","njust","seu"],
+    nmg:[{year:2024,type:"理科",score:578,rank:"约7000"},{year:2023,type:"理科",score:562,rank:"约7500"},{year:2023,type:"文科",score:516,rank:2667},{year:2022,type:"理科",score:538,rank:"约9200"},{year:2021,type:"理科",score:556,rank:"约8100"},{year:2020,type:"理科",score:552,rank:"约8400"}]},
+  scu:{id:"scu",name:"四川大学",city:"chengdu",founded:1896,web:"https://www.scu.edu.cn",desc:"西南地区最高学府，文理医工综合实力雄厚，医学、生命科学领先全国。",majors:["临床医学","生命科学","中国语言文学","水利工程"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:5,dorm:4,emp:4},recs:["uestc","whu","sysu"],
+    nmg:[{year:2025,type:"物理类",score:668,rank:436},{year:2025,type:"历史类",score:636,rank:342},{year:2024,type:"理科",score:665,rank:"约519"},{year:2023,type:"理科",score:648,rank:"约570"},{year:2023,type:"文科",score:557,rank:889},{year:2022,type:"理科",score:624,rank:"约730"},{year:2021,type:"理科",score:642,rank:"约620"},{year:2020,type:"理科",score:639,rank:"约660"}]},
+  uestc:{id:"uestc",name:"电子科技大学",city:"chengdu",founded:1956,web:"https://www.uestc.edu.cn",desc:"以电子信息科技为核心的高水平研究型大学，电子、通信、网络工程全国第一。",majors:["电子信息","通信工程","网络工程","人工智能"],tier:"985",dorm:{type:"4人间",ac:true,bath:false},rate:{study:5,env:4,dorm:4,emp:5},recs:["scu","hust","buaa"],
+    nmg:[{year:2025,type:"物理类",score:647,rank:1316},{year:2024,type:"理科",score:644,rank:"约1490"},{year:2023,type:"理科",score:627,rank:"约1600"},{year:2022,type:"理科",score:604,rank:"约1950"},{year:2021,type:"理科",score:621,rank:"约1700"},{year:2020,type:"理科",score:618,rank:"约1750"}]},
+  swufe:{id:"swufe",name:"西南财经大学",city:"chengdu",founded:1925,web:"https://www.swufe.edu.cn",desc:"西部地区财经类最高学府，金融、经济、会计就业竞争力突出。",majors:["金融学","经济学","会计学","工商管理"],tier:"211",dorm:{type:"4人间",ac:true,bath:false},rate:{study:4,env:4,dorm:4,emp:4},recs:["scu","ruc","nankai"],
+    nmg:[{year:2024,type:"理科",score:598,rank:"约5400"},{year:2023,type:"理科",score:582,rank:"约5700"},{year:2023,type:"文科",score:538,rank:1503},{year:2022,type:"理科",score:558,rank:"约6900"},{year:2021,type:"理科",score:575,rank:"约6100"},{year:2020,type:"理科",score:571,rank:"约6300"}]},
+};
+
+const RANKS={
+  all:Object.values(CITIES).sort((a,b)=>a.ranks.all-b.ranks.all),
+  emp:Object.values(CITIES).sort((a,b)=>a.ranks.emp-b.ranks.emp),
+  uni:Object.values(CITIES).sort((a,b)=>a.ranks.uni-b.ranks.uni),
+  sal:Object.values(CITIES).sort((a,b)=>a.ranks.sal-b.ranks.sal),
+};
+
+const SEARCH_IDX=[
+  ...Object.values(CITIES).map(c=>({type:"city",id:c.id,name:c.name,tags:[c.region,...c.industries]})),
+  ...Object.values(UNIS).map(u=>({type:"uni",id:u.id,name:u.name,tags:[...u.majors,u.tier,CITIES[u.city]?.name||""]})),
+];
+
+// ── Stars ──────────────────────────────────────
+function Stars({v}){return <span>{[1,2,3,4,5].map(i=><span key={i} style={{color:i<=v?"#f59e0b":"#333",fontSize:14}}>★</span>)} <span style={{color:"#666",fontSize:12}}>{v}/5</span></span>;}
+
+// ── Header ─────────────────────────────────────
+function Header({nav,page}){
+  const [q,setQ]=useState(""), [res,setRes]=useState([]), [show,setShow]=useState(false);
+  const search=v=>{setQ(v);if(!v){setRes([]);setShow(false);return;}const r=SEARCH_IDX.filter(x=>x.name.includes(v)||x.tags.some(t=>t.includes(v))).slice(0,8);setRes(r);setShow(true);};
+  return(
+    <header style={{background:"#070714",borderBottom:"1px solid #1a1a30",padding:"0 16px",display:"flex",alignItems:"center",gap:14,height:54,position:"sticky",top:0,zIndex:200}}>
+      <span onClick={()=>nav("home")} style={{fontWeight:800,fontSize:18,color:"#fff",cursor:"pointer"}}>城探</span>
+      <span onClick={()=>nav("cities")} style={{color:page==="cities"?"#6366f1":"#888",cursor:"pointer",fontSize:13}}>排行榜</span>
+      <div style={{flex:1,position:"relative",maxWidth:360}}>
+        <input value={q} onChange={e=>search(e.target.value)} placeholder="搜索城市、学校、专业…"
+          style={{width:"100%",padding:"6px 32px 6px 12px",background:"#111",border:"1px solid #2a2a4a",borderRadius:20,color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}}
+          onFocus={()=>q&&setShow(true)} onBlur={()=>setTimeout(()=>setShow(false),150)}/>
+        <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#555",fontSize:13}}>🔍</span>
+        {show&&res.length>0&&<div style={{position:"absolute",top:"110%",left:0,right:0,background:"#111",border:"1px solid #2a2a4a",borderRadius:10,overflow:"hidden",zIndex:300}}>
+          {res.map(x=><div key={x.id} onMouseDown={()=>{setQ("");setShow("");nav(x.type,x.id);}} style={{padding:"8px 14px",cursor:"pointer",borderBottom:"1px solid #1a1a30",display:"flex",gap:8,alignItems:"center"}}>
+            <span>{x.type==="city"?"🏙️":"🎓"}</span>
+            <div><div style={{color:"#fff",fontSize:13}}>{x.name}</div><div style={{color:"#666",fontSize:11}}>{x.tags.slice(0,3).join(" · ")}</div></div>
+          </div>)}
+        </div>}
+      </div>
+    </header>
+  );
+}
+
+// ── Home ───────────────────────────────────────
+function Home({nav}){
+  const cities=Object.values(CITIES);
+  const regions=[...new Set(cities.map(c=>c.region))];
+  return(
+    <div style={{background:"#060612",minHeight:"100vh"}}>
+      <div style={{textAlign:"center",padding:"60px 20px 40px",background:"linear-gradient(180deg,#0d0d2b,#060612)"}}>
+        <div style={{fontSize:10,letterSpacing:6,color:"#6366f1",marginBottom:12}}>EXPLORE CHINA</div>
+        <h1 style={{fontSize:"clamp(26px,5vw,50px)",fontWeight:900,color:"#fff",margin:"0 0 14px",lineHeight:1.1}}>走进中国城市与高校</h1>
+        <p style={{color:"#777",fontSize:14,maxWidth:480,margin:"0 auto 24px",lineHeight:1.7}}>覆盖北京、上海、深圳、广州、杭州、南京、苏州、武汉、成都、天津 10 大城市与 32 所重点高校。点击地图或城市卡片，开启探索。</p>
+        <button onClick={()=>nav("cities")} style={{padding:"10px 28px",background:"#1a1a2e",border:"1px solid #333",borderRadius:24,color:"#fff",cursor:"pointer",fontSize:14}}>城市排行榜 →</button>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"0 16px 60px"}}>
+        {regions.map(r=>(
+          <div key={r} style={{marginBottom:40}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+              <h2 style={{color:"#fff",fontSize:17,fontWeight:700,margin:0}}>{r}</h2>
+              <div style={{flex:1,height:1,background:"#1a1a30"}}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
+              {cities.filter(c=>c.region===r).map(c=>(
+                <div key={c.id} onClick={()=>nav("city",c.id)} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:12,overflow:"hidden",cursor:"pointer",transition:"all 0.2s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.transform="translateY(-2px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a30";e.currentTarget.style.transform="translateY(0)";}}>
+                  <Img id={c.id} name={c.name} label={c.name} h={130}/>
+                  <div style={{padding:14}}>
+                    <div style={{fontSize:10,color:"#6366f1",marginBottom:3}}>{c.province}</div>
+                    <h3 style={{color:"#fff",margin:"0 0 6px",fontSize:16}}>{c.name}</h3>
+                    <p style={{color:"#777",fontSize:12,margin:"0 0 10px",lineHeight:1.5}}>{c.desc.slice(0,48)}…</p>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      {c.industries.slice(0,3).map(i=><span key={i} style={{padding:"1px 7px",background:"#111",border:"1px solid #2a2a4a",borderRadius:10,color:"#999",fontSize:10}}>{i}</span>)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── City ───────────────────────────────────────
+function City({id,nav}){
+  const c=CITIES[id]; if(!c)return null;
+  const unis=c.unis.map(u=>UNIS[u]).filter(Boolean);
+  return(
+    <div style={{background:"#060612",minHeight:"100vh"}}>
+      <div style={{position:"relative",height:"42vh",minHeight:240}}>
+        <Img id={c.id} name={c.name} label={c.name} h="100%"/>
+        <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,#060612,transparent 55%)"}}/>
+        <div style={{position:"absolute",bottom:24,left:24}}>
+          <div style={{fontSize:10,color:"#6366f1",letterSpacing:4,marginBottom:6}}>{c.province} · {c.region}</div>
+          <h1 style={{color:"#fff",fontSize:"clamp(24px,4vw,42px)",fontWeight:900,margin:0}}>{c.name}</h1>
+          <p style={{color:"#bbb",margin:"6px 0 0",fontSize:13,maxWidth:440}}>{c.desc}</p>
+        </div>
+      </div>
+      <div style={{maxWidth:1000,margin:"0 auto",padding:"24px 16px 60px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:28}}>
+          {[["常住人口",c.pop],["GDP",c.gdp],["重点高校",`${unis.length}所`],["综合排名",`第${c.ranks.all}名`]].map(([k,v])=>(
+            <div key={k} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,padding:14}}>
+              <div style={{color:"#555",fontSize:10,marginBottom:3}}>{k}</div>
+              <div style={{color:"#fff",fontSize:17,fontWeight:700}}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10,marginBottom:28}}>
+          {c.adv.map(a=><div key={a.t} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,padding:14}}>
+            <div style={{color:"#6366f1",fontWeight:600,marginBottom:5,fontSize:13}}>{a.t}</div>
+            <div style={{color:"#999",fontSize:12,lineHeight:1.6}}>{a.d}</div>
+          </div>)}
+        </div>
+        <div style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:12,padding:20,marginBottom:28}}>
+          <div style={{marginBottom:12}}>
+            <div style={{color:"#555",fontSize:10,marginBottom:6}}>主要产业</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c.industries.map(i=><span key={i} style={{padding:"4px 12px",background:"#6366f110",border:"1px solid #6366f130",borderRadius:16,color:"#6366f1",fontSize:12}}>{i}</span>)}</div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <div style={{color:"#555",fontSize:10,marginBottom:6}}>代表企业</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c.companies.map(co=><span key={co} style={{padding:"3px 10px",background:"#111",border:"1px solid #2a2a4a",borderRadius:12,color:"#ccc",fontSize:12}}>{co}</span>)}</div>
+          </div>
+          <div style={{color:"#999",fontSize:12,lineHeight:1.7}}>{c.empDesc}</div>
+        </div>
+        <h2 style={{color:"#fff",fontSize:18,fontWeight:700,marginBottom:14}}>重点高校</h2>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
+          {unis.map(u=>(
+            <div key={u.id} onClick={()=>nav("uni",u.id)} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:12,overflow:"hidden",cursor:"pointer",transition:"all 0.2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a30";e.currentTarget.style.transform="translateY(0)";}}>
+              <UniImg name={u.name} label={u.name} cityId={u.city} h={110}/>
+              <div style={{padding:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                  <span style={{color:"#fff",fontWeight:700,fontSize:14}}>{u.name}</span>
+                  <span style={{padding:"1px 6px",background:"#6366f115",color:"#6366f1",borderRadius:7,fontSize:10}}>{u.tier}</span>
+                </div>
+                <p style={{color:"#777",fontSize:11,margin:0,lineHeight:1.5}}>{u.desc.slice(0,50)}…</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── University ─────────────────────────────────
+function Uni({id,nav}){
+  const u=UNIS[id]; if(!u)return null;
+  const c=CITIES[u.city];
+  const recs=(u.recs||[]).map(r=>UNIS[r]).filter(Boolean);
+  return(
+    <div style={{background:"#060612",minHeight:"100vh"}}>
+      <div style={{position:"relative",height:"38vh",minHeight:220}}>
+        <UniImg name={u.name} label={u.name} cityId={u.city} h="100%"/>
+        <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,#060612,transparent 55%)"}}/>
+        <div style={{position:"absolute",bottom:20,left:24}}>
+          <button onClick={()=>nav("city",u.city)} style={{background:"none",border:"none",color:"#6366f1",cursor:"pointer",fontSize:13,padding:"0 0 8px",display:"block"}}>← {c?.name}</button>
+          <h1 style={{color:"#fff",fontSize:"clamp(20px,3.5vw,34px)",fontWeight:900,margin:0}}>{u.name}</h1>
+          <p style={{color:"#bbb",margin:"6px 0 0",fontSize:12,maxWidth:420}}>{u.desc}</p>
+        </div>
+      </div>
+      <div style={{maxWidth:1000,margin:"0 auto",padding:"24px 16px 60px"}}>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:24,alignItems:"center"}}>
+          {[["建校",u.founded+"年"],["层次",u.tier],["所在地",c?.name]].map(([k,v])=>(
+            <div key={k} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,padding:"12px 18px"}}>
+              <div style={{color:"#555",fontSize:10}}>{k}</div>
+              <div style={{color:"#fff",fontSize:15,fontWeight:700,marginTop:2}}>{v}</div>
+            </div>
+          ))}
+          <a href={u.web} target="_blank" rel="noopener noreferrer" style={{padding:"10px 20px",background:"#6366f1",borderRadius:20,color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600}}>访问官网 ↗</a>
+        </div>
+
+        <div style={{marginBottom:24}}>
+          <h3 style={{color:"#fff",fontSize:16,fontWeight:700,marginBottom:10}}>优势专业</h3>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {u.majors.map(m=><span key={m} style={{padding:"6px 14px",background:"#6366f110",border:"1px solid #6366f130",borderRadius:20,color:"#a5b4fc",fontSize:13}}>{m}</span>)}
+          </div>
+        </div>
+
+        {/* 内蒙古分数线 */}
+        <ScoreTable scores={u.nmg}/>
+
+        <div style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:12,padding:20,marginBottom:24}}>
+          <h3 style={{color:"#fff",fontSize:16,fontWeight:700,marginBottom:14}}>宿舍 & 学生评价</h3>
+          <div style={{display:"flex",gap:20,flexWrap:"wrap",marginBottom:16}}>
+            {[["房型",u.dorm.type],["空调",u.dorm.ac?"✅ 有":"❌ 无"],["独立卫浴",u.dorm.bath?"✅ 有":"❌ 无"]].map(([k,v])=>(
+              <div key={k}><div style={{color:"#555",fontSize:10}}>{k}</div><div style={{color:"#fff",fontSize:14,fontWeight:600,marginTop:2}}>{v}</div></div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+            {[["学习氛围",u.rate.study],["校园环境",u.rate.env],["宿舍条件",u.rate.dorm],["就业情况",u.rate.emp]].map(([l,v])=>(
+              <div key={l}><div style={{color:"#999",fontSize:12,marginBottom:4}}>{l}</div><Stars v={v}/></div>
+            ))}
+          </div>
+        </div>
+
+        {recs.length>0&&<div>
+          <h3 style={{color:"#fff",fontSize:16,fontWeight:700,marginBottom:5}}>你可能还感兴趣</h3>
+          <p style={{color:"#555",fontSize:12,marginBottom:12}}>同层次 / 同专业方向推荐</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
+            {recs.map(r=><div key={r.id} onClick={()=>nav("uni",r.id)} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,cursor:"pointer",display:"flex",gap:10,padding:12,alignItems:"center",transition:"border-color 0.2s"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="#6366f1"}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a30"}>
+              <div style={{width:48,height:48,borderRadius:8,overflow:"hidden",flexShrink:0}}><UniImg name={r.name} label={r.name} cityId={r.city} h={48}/></div>
+              <div><div style={{color:"#fff",fontWeight:600,fontSize:13}}>{r.name}</div><div style={{color:"#555",fontSize:11,marginTop:2}}>{CITIES[r.city]?.name} · {r.tier}</div></div>
+            </div>)}
+          </div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Rankings ───────────────────────────────────
+function Rankings({nav}){
+  const [tab,setTab]=useState("all");
+  const tabs=[{id:"all",label:"综合推荐"},{id:"emp",label:"就业竞争力"},{id:"uni",label:"高校资源"},{id:"sal",label:"薪资水平"}];
+  const medal=["#f59e0b","#9ca3af","#b45309"];
+  return(
+    <div style={{background:"#060612",minHeight:"100vh",padding:"36px 16px 60px"}}>
+      <div style={{maxWidth:800,margin:"0 auto"}}>
+        <div style={{fontSize:10,color:"#6366f1",letterSpacing:5,marginBottom:8}}>RANKING</div>
+        <h1 style={{color:"#fff",fontSize:28,fontWeight:900,margin:"0 0 4px"}}>城市排行榜</h1>
+        <p style={{color:"#555",marginBottom:24,fontSize:13}}>根据就业竞争力、高校资源、薪资水平综合评估</p>
+        <div style={{display:"flex",gap:6,marginBottom:24,background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:10,padding:4,width:"fit-content"}}>
+          {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"6px 16px",background:tab===t.id?"#6366f1":"transparent",border:"none",borderRadius:8,color:tab===t.id?"#fff":"#777",cursor:"pointer",fontSize:12,fontWeight:tab===t.id?700:400}}>{t.label}</button>)}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {RANKS[tab].map((c,i)=>(
+            <div key={c.id} onClick={()=>nav("city",c.id)} style={{background:"#0c0c1e",border:"1px solid #1a1a30",borderRadius:12,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,transition:"all 0.2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.transform="translateX(4px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a30";e.currentTarget.style.transform="translateX(0)";}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:i<3?medal[i]+"22":"#111",border:`2px solid ${i<3?medal[i]:"#2a2a4a"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{color:i<3?medal[i]:"#555",fontWeight:700,fontSize:13}}>{i+1}</span>
+              </div>
+              <div style={{width:50,height:38,borderRadius:7,overflow:"hidden",flexShrink:0}}><Img id={c.id} name={c.name} label={c.name} h={38}/></div>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{color:"#fff",fontWeight:700,fontSize:14}}>{c.name}</span>
+                  <span style={{color:"#555",fontSize:11}}>{c.province}</span>
+                  <span style={{padding:"1px 6px",background:"#111",border:"1px solid #2a2a4a",borderRadius:7,color:"#777",fontSize:9}}>{c.region}</span>
+                </div>
+                <div style={{display:"flex",gap:12,marginTop:4}}>
+                  {[["就业",c.ranks.emp],["高校",c.ranks.uni],["薪资",c.ranks.sal]].map(([k,v])=><span key={k} style={{color:"#555",fontSize:11}}>{k} <span style={{color:"#a5b4fc"}}>#{v}</span></span>)}
+                </div>
+              </div>
+              <span style={{color:"#6366f1",fontSize:16}}>›</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ────────────────────────────────────────
+function App(){
+  const [page,setPage]=useState({type:"home"});
+  const nav=(type,id)=>{setPage({type,id});window.scrollTo({top:0,behavior:"smooth"});};
+  return(
+    <div style={{fontFamily:"'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif"}}>
+      <style>{`*{box-sizing:border-box;}body{margin:0;background:#060612;}@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+      <Header nav={nav} page={page.type}/>
+      {page.type==="home"&&<Home nav={nav}/>}
+      {page.type==="city"&&<City id={page.id} nav={nav}/>}
+      {page.type==="uni"&&<Uni id={page.id} nav={nav}/>}
+      {page.type==="cities"&&<Rankings nav={nav}/>}
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
